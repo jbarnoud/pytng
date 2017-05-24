@@ -36,6 +36,10 @@ cdef extern from "tng/tng_io.h":
         const tng_trajectory_t tng_data,
         int64_t *n)
 
+    tng_function_status tng_num_molecules_get(
+        const tng_trajectory_t tng_data,
+        int64_t *n)
+
     tng_function_status tng_distance_unit_exponential_get(
         const tng_trajectory_t tng_data,
         int64_t *exp);
@@ -73,6 +77,7 @@ cdef class TNGFile:
     cdef int reached_eof
     cdef int64_t _n_frames
     cdef int64_t _n_atoms
+    cdef int64_t _n_molecules
     cdef int64_t step
     cdef float distance_scale
 
@@ -126,6 +131,13 @@ cdef class TNGFile:
         self.is_open = True
         self.step = 0
         self.reached_eof = False
+
+    @property
+    def n_molecules(self):
+        ok = tng_num_molecules_get(self._traj, & self._n_molecules)
+        if ok != TNG_SUCCESS:
+            raise IOError("Failed to read number of molecules")
+        return self._n_molecules
 
     def close(self):
         if self.is_open:

@@ -28,7 +28,8 @@ def GMX_REF_FILEPATH():
 def GMX_REF_DATA():
     # reference data for GMX_REF from Gromacs/tng library
     TNG = namedtuple('TNGData',
-                     ['length', 'natoms', 'first_frame', 'last_frame', 'time', 'box'])
+                     ['length', 'natoms', 'first_frame', 'last_frame', 'time',
+                      'box', 'n_molecules'])
 
     # reference data determined via `gmx dump`
     # 5 water molecules, chain W resname WAT
@@ -79,6 +80,7 @@ def GMX_REF_DATA():
         last_frame=last_frame,
         time=time,
         box=np.eye(3) * 50,
+        n_molecules=5,
     )
 
 
