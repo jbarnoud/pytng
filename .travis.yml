@@ -1,0 +1,23 @@
+language: python
+sudo: false
+
+python:
+  - "2.7"
+  - "3.5"
+  - "3.6"
+
+branches:
+  only:
+    - master
+
+install:
+  - pip install --upgrade pytest
+  - pip install codecov pytest-cov pytest-pep8
+  - pip install --upgrade numpy cython
+  - pip install -e .
+
+script:
+  - py.test -v --cov pytng --pep8 pytng tests
+
+after_success:
+  - codecov

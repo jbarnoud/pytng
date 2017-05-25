@@ -1,3 +1,6 @@
+# cython: linetrace=True
+# distutils: define_macros=CYTHON_TRACE=1
+
 from libc.stdint cimport int64_t
 from libc.stdlib cimport malloc, free
 
@@ -19,6 +22,9 @@ status_error_message = ['OK', 'Failure', 'Critical']
 
 cdef extern from "tng/tng_io.h":
     ctypedef struct tng_trajectory_t:
+        pass
+
+    ctypedef struct tng_molecule_t:
         pass
 
     tng_function_status tng_util_trajectory_open(
@@ -67,6 +73,36 @@ cdef extern from "tng/tng_io.h":
         int64_t *n_values_per_frame,
         char *type)
 
+    tng_function_status tng_atom_name_of_particle_nr_get(
+                const tng_trajectory_t tng_data,
+                const int64_t nr,
+                char *name,
+                const int max_len)
+
+    tng_function_status tng_atom_type_of_particle_nr_get(
+                const tng_trajectory_t tng_data,
+                const int64_t nr,
+                char *type,
+                const int max_len)
+
+    tng_function_status tng_chain_name_of_particle_nr_get(
+        const tng_trajectory_t tng_data,
+        const int64_t nr,
+        char *name,
+        const int max_len)
+
+    tng_function_status tng_global_residue_id_of_particle_nr_get(
+        const tng_trajectory_t tng_data,
+        const int64_t nr,
+        int64_t *id)
+
+    tng_function_status tng_residue_name_of_particle_nr_get(
+        const tng_trajectory_t tng_data,
+        const int64_t nr,
+        char *name,
+        const int max_len)
+
+
 TNGFrame = namedtuple("TNGFrame", "xyz time step box")
 
 cdef class TNGFile:
@@ -110,7 +146,8 @@ cdef class TNGFile:
         if self.mode == 'r' and not os.path.exists(fname):
             raise IOError("File '{}' does not exist".format(fname))
 
-        ok = tng_util_trajectory_open(fname, _mode, & self._traj)
+        fname_bytes = fname.encode('UTF-8')
+        ok = tng_util_trajectory_open(fname_bytes, _mode, & self._traj)
         if ok != TNG_SUCCESS:
             raise IOError("An error ocurred opening the file. {}".format(status_error_message[ok]))
 
@@ -177,6 +214,92 @@ cdef class TNGFile:
         if not self.is_open:
             raise IOError('No file currently opened')
         return self._n_atoms
+
+    @property
+    def n_molecules(self):
+        if not self.is_open:
+            raise IOError('No file currently opened')
+        cdef int64_t n_molecules
+        ok = tng_num_molecules_get(self._traj, & n_molecules)
+        if ok != TNG_SUCCESS:
+            raise IOError("Failed to read number of molecules")
+        return n_molecules
+
+    @property
+    def atomtypes(self):
+        if not self.is_open:
+            raise IOError('No file currently opened')
+        cdef int64_t i, ok
+        cdef np.ndarray[ndim=1, dtype=object] types = np.empty(self._n_atoms, dtype=object)
+
+        cdef char text[128]
+        for i in range(self._n_atoms):
+            ok = tng_atom_type_of_particle_nr_get(self._traj, i, text, 128)
+            types[i] = str(text)
+
+        return types
+
+    @property
+    def atomnames(self):
+        if not self.is_open:
+            raise IOError('No file currently opened')
+        cdef int64_t i, ok
+        cdef np.ndarray[ndim=1, dtype=object] names = np.empty(self._n_atoms, dtype=object)
+
+        cdef char text[256]
+        for i in range(self._n_atoms):
+            ok = tng_atom_name_of_particle_nr_get(self._traj, i, text, 256)
+            names[i] = str(text)
+
+        return names
+
+    @property
+    def chainnames(self):
+        if not self.is_open:
+            raise IOError('No file currently opened')
+        cdef int64_t i, ok
+        cdef np.ndarray[ndim=1, dtype=object] chains = np.empty(self._n_atoms, dtype=object)
+
+        cdef char text[1024]
+        for i in range(self._n_atoms):
+            ok = tng_chain_name_of_particle_nr_get(self._traj, i, text, 1024)
+            chains[i] = str(text)
+
+        return chains
+
+    @property
+    def n_chains(self):
+        return len(np.unique(self.chainnames))
+
+    @property
+    def residue_names(self):
+        if not self.is_open:
+            raise IOError('No file currently opened')
+        cdef int64_t i, ok
+        cdef np.ndarray[ndim=1, dtype=object] names = np.empty(self._n_atoms, dtype=object)
+
+        cdef char text[1024]
+        for i in range(self._n_atoms):
+            ok = tng_residue_name_of_particle_nr_get(self._traj, i, text, 1024)
+            names[i] = str(text)
+
+        return names
+
+    @property
+    def residue_ids(self):
+        if not self.is_open:
+            raise IOError('No file currently opened')
+        cdef int64_t i, ok, id
+        cdef np.ndarray[ndim=1, dtype=np.int64_t] ids = np.empty(self._n_atoms, dtype=np.int64)
+
+        for i in range(self._n_atoms):
+            ok = tng_global_residue_id_of_particle_nr_get(self._traj, i, &ids[i])
+
+        return ids
+
+    @property
+    def n_residues(self):
+        return len(np.unique(self.residue_ids))
 
     def __len__(self):
         return self.n_frames
